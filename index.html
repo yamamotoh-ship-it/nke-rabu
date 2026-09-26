@@ -6,59 +6,88 @@
   <title>NKEラ部</title>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="NKEラ部">
   <meta name="application-name" content="NKEラ部">
   <meta name="theme-color" content="#1f5fbf">
-  <link rel="apple-touch-icon" href="icon-180.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://yamamotoh-ship-it.github.io/nke-rabu/icon-180.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://yamamotoh-ship-it.github.io/nke-rabu/icon-32.png">
   <link rel="manifest" href="manifest.webmanifest">
   <style>
-    html, body { margin: 0; min-height: 100%; }
-    body {
-      background: #1f5fbf; color: #fff; text-align: center; line-height: 1.6;
-      font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif;
+    html, body { margin: 0; height: 100%; background: #1f5fbf; }
+    body { display: flex; flex-direction: column; font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif; }
+    #app { flex: 1; width: 100%; border: 0; display: block; background: #fff; }
+    #splash {
+      position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 14px; background: #1f5fbf; color: #fff; z-index: 2; transition: opacity .3s;
     }
-    .wrap { max-width: 420px; margin: 0 auto; padding: 48px 20px; }
-    img { width: 112px; height: 112px; border-radius: 26px; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
-    h1 { font-size: 22px; margin: 16px 0 24px; }
-    .btn {
-      display: block; background: #fff; color: #1747a6; font-weight: 700; font-size: 17px;
-      text-decoration: none; padding: 14px; border-radius: 12px;
+    #splash img { width: 104px; height: 104px; border-radius: 24px; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    #tip {
+      display: none; align-items: center; gap: 10px; padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top));
+      background: #17489a; color: #fff; font-size: 13px; line-height: 1.5;
     }
-    .howto { margin-top: 28px; background: rgba(255,255,255,.12); border-radius: 12px; padding: 14px 16px; text-align: left; font-size: 14px; }
-    .howto b { display: block; margin-bottom: 4px; }
-    .howto p { margin: 0 0 10px; }
-    .howto p:last-child { margin: 0; }
-    #launching { display: none; margin-top: 16px; }
+    #tip span { flex: 1; }
+    #tip button { border: 0; background: rgba(255,255,255,.2); color: #fff; border-radius: 8px; padding: 4px 10px; font-size: 13px; }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <img src="icon-192.png" alt="NKEラ部">
-    <h1>NKEラ部 ラーメンマップ</h1>
-    <div id="launching">開いています…</div>
-    <div id="guide">
-      <a class="btn" id="go" href="#">アプリを開く</a>
-      <div class="howto">
-        <b>📱 ホーム画面に追加すると便利です</b>
-        <p><b>iPhone（Safari）</b>画面下の共有ボタン（□に↑）→「ホーム画面に追加」</p>
-        <p><b>Android（Chrome）</b>右上の︙ →「ホーム画面に追加」または「アプリをインストール」</p>
-        <p>追加したアイコンから起動すると、自動でアプリが開きます。</p>
-      </div>
-    </div>
+  <div id="tip">
+    <span id="tipText"></span>
+    <button id="tipClose" aria-label="閉じる">×</button>
   </div>
+  <iframe id="app" title="NKEラ部 ラーメンマップ"
+    allow="geolocation; camera; clipboard-write; fullscreen"></iframe>
+  <div id="splash"><img src="icon-192.png" alt=""><div>読み込み中…</div></div>
+
   <script>
     // GASのWebアプリの公開URL（デプロイIDが変わったらここを書き換える）
     var APP_URL = 'https://script.google.com/macros/s/AKfycby9G6spVwYzMOyE2WrEoH9kxh0pr6zk3jUC52R6eu6PXKc3nTdr6TrwgOwmGAYo-mMmKw/exec';
-    document.getElementById('go').href = APP_URL;
-    // ホーム画面のアイコンから起動したときだけ、自動でアプリへ移動する
+
+    // アプリ本体はこのページの中に表示する。
+    // ログイン状態はこのページ側（github.io）に保存し、アプリからの問い合わせに答える。
+    // （iPhoneでは、埋め込まれたGoogle側の画面に保存したデータがすぐ消えてしまうため）
+    var APP_ORIGIN = /^https:\/\/[a-z0-9-]+-script\.googleusercontent\.com$/;
+    function sget(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function sset(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+    function sdel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+
+    window.addEventListener('message', function (e) {
+      if (!APP_ORIGIN.test(e.origin)) return;
+      var m = e.data;
+      if (!m || m.nke !== 1 || typeof m.key !== 'string' || m.key.indexOf('nke_') !== 0) return;
+      if (m.op === 'get') {
+        e.source.postMessage({ nke: 1, op: 'value', id: m.id, key: m.key, value: sget(m.key) }, e.origin);
+      } else if (m.op === 'set') {
+        sset(m.key, String(m.value));
+      } else if (m.op === 'del') {
+        sdel(m.key);
+      } else if (m.op === 'ready') {
+        hideSplash();
+      }
+    });
+
+    var app = document.getElementById('app');
+    var splash = document.getElementById('splash');
+    function hideSplash() { splash.style.opacity = '0'; setTimeout(function () { splash.style.display = 'none'; }, 300); }
+    app.addEventListener('load', function () { setTimeout(hideSplash, 1500); });
+    app.src = APP_URL;
+
+    // ブラウザで開いているとき（ホーム画面から起動していないとき）は、追加方法を案内する
     var standalone = window.navigator.standalone === true ||
       (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-    if (standalone) {
-      document.getElementById('guide').style.display = 'none';
-      document.getElementById('launching').style.display = 'block';
-      location.replace(APP_URL);
+    var ua = navigator.userAgent;
+    var isIOS = /iPhone|iPad|iPod/.test(ua) || (ua.indexOf('Mac') >= 0 && 'ontouchend' in document);
+    var isAndroid = /Android/.test(ua);
+    if (!standalone && (isIOS || isAndroid) && !sget('nke_tip_closed')) {
+      document.getElementById('tipText').textContent = isIOS
+        ? '📱 共有ボタン（□に↑）→「ホーム画面に追加」で、アプリのように使えます'
+        : '📱 右上の︙ →「ホーム画面に追加」で、アプリのように使えます';
+      document.getElementById('tip').style.display = 'flex';
     }
+    document.getElementById('tipClose').onclick = function () {
+      document.getElementById('tip').style.display = 'none';
+      sset('nke_tip_closed', '1');
+    };
   </script>
 </body>
 </html>
